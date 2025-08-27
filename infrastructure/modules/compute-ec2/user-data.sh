@@ -14,7 +14,7 @@ apt-get install -y \
     software-properties-common
 
 # Set hostname
-hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)
+#hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)
 
 # Disable swap
 swapoff -a
