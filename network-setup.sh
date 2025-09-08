@@ -19,9 +19,9 @@ hostname -I
 sudo nano /etc/hosts
 # Add the following lines to /etc/hosts at the bottom
 
-<master-private-ip> k8s-master
-<worker1-private-ip> k8s-worker1
-<worker2-private-ip> k8s-worker2
+<master-private-ip> k8s-master 172.31.111.112 
+<worker1-private-ip> k8s-worker1 172.31.111.174 
+<worker2-private-ip> k8s-worker2 172.31.2.121 
 
 # Disable swap (Kubernetes requires swap to be disabled):
 

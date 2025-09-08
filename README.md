@@ -1,100 +1,63 @@
-# Kubernetes Cluster Setup (CKS)
+# Kubernetes Cluster Setup for CKS
 
-A comprehensive guide for setting up a multi-node Kubernetes cluster on Ubuntu instances for Certified Kubernetes Security Specialist (CKS) preparation.
+Complete Kubernetes cluster setup with security configurations and tenant management for CKS exam preparation.
 
-## Overview
+## What You'll Build
 
-This repository contains scripts and documentation for deploying a production-ready Kubernetes cluster with:
-- 1 Master node
-- 2 Worker nodes
+- 1 Master node (k8s-master)
+- 2 Worker nodes (k8s-worker1, k8s-worker2)
 - Containerd runtime
-- Calico CNI plugin
-- Security best practices
+- Calico networking
+- Multi-tenant security configurations
+- RBAC and network policies
 
-## Prerequisites
+## Requirements
 
-- 3 Ubuntu instances (18.04+ or 20.04+)
-- Minimum 2 CPU cores and 2GB RAM per node
-- Network connectivity between all nodes
-- Root or sudo access on all nodes
+- 3 Ubuntu 20.04+ servers
+- 2GB RAM, 2 CPU cores per node minimum
+- Internet connection
+- SSH access to all nodes
 
-## Architecture
+## Quick Setup
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   k8s-master    │    │  k8s-worker1    │    │  k8s-worker2    │
-│                 │    │                 │    │                 │
-│ Control Plane   │◄──►│   Worker Node   │    │   Worker Node   │
-│ - API Server    │    │ - kubelet       │    │ - kubelet       │
-│ - etcd          │    │ - kube-proxy    │    │ - kube-proxy    │
-│ - Scheduler     │    │ - containerd    │    │ - containerd    │
-│ - Controller    │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+1. Run `network-setup.sh` on all nodes
+2. Follow the step-by-step installation below
+3. Use tenant management scripts for security configurations
 
-## Quick Start
+## Step-by-Step Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd cks
-   ```
+### 1. Prepare All Nodes
 
-2. **Run the setup script on all nodes:**
-   ```bash
-   chmod +x network-setup.sh
-   sudo ./network-setup.sh
-   ```
-
-3. **Follow the step-by-step instructions below**
-
-## Step-by-Step Setup
-
-### Phase 1: System Preparation (All Nodes)
-
-#### 1.1 Update System Packages
+Update and set hostnames:
 ```bash
 sudo apt update && sudo apt upgrade -y
+
+# Set hostname (different on each node)
+sudo hostnamectl set-hostname k8s-master   # on master
+sudo hostnamectl set-hostname k8s-worker1 # on worker1
+sudo hostnamectl set-hostname k8s-worker2 # on worker2
 ```
 
-#### 1.2 Configure Hostnames
+Configure hosts file on all nodes:
 ```bash
-# On master node
-sudo hostnamectl set-hostname k8s-master
-
-# On worker node 1
-sudo hostnamectl set-hostname k8s-worker1
-
-# On worker node 2
-sudo hostnamectl set-hostname k8s-worker2
+sudo nano /etc/hosts
+```
+Add your node IPs:
+```
+<master-ip> k8s-master
+<worker1-ip> k8s-worker1
+<worker2-ip> k8s-worker2
 ```
 
-#### 1.3 Configure Host Resolution
-1. Find private IPs:
-   ```bash
-   hostname -I
-   ```
-
-2. Update `/etc/hosts` on all nodes:
-   ```bash
-   sudo nano /etc/hosts
-   ```
-   Add these lines (replace with actual IPs):
-   ```
-   <master-private-ip> k8s-master
-   <worker1-private-ip> k8s-worker1
-   <worker2-private-ip> k8s-worker2
-   ```
-
-#### 1.4 Disable Swap
+Disable swap:
 ```bash
 sudo swapoff -a
 sudo sed -i '/ swap / s/^/#/' /etc/fstab
 ```
 
-### Phase 2: Container Runtime Setup (All Nodes)
+### 2. Install Container Runtime (All Nodes)
 
-#### 2.1 Install Containerd
+Install containerd:
 ```bash
 sudo apt install -y containerd
 sudo mkdir -p /etc/containerd
@@ -103,26 +66,27 @@ sudo systemctl restart containerd
 sudo systemctl enable containerd
 ```
 
-### Phase 3: Kubernetes Installation (All Nodes)
+### 3. Install Kubernetes (All Nodes)
 
-#### 3.1 Install Kubernetes Components
+Add Kubernetes repository:
 ```bash
-sudo apt-get update
 sudo apt-get install -y apt-transport-https ca-certificates curl
 sudo curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+```
+
+Install Kubernetes components:
+```bash
 sudo apt-get update
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
-#### 3.2 Configure Network Settings
+Configure networking:
 ```bash
-# Load br_netfilter module
 sudo modprobe br_netfilter
 echo "br_netfilter" | sudo tee /etc/modules-load.d/br_netfilter.conf
 
-# Configure sysctl settings
 sudo tee /etc/sysctl.d/k8s.conf <<EOF
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
@@ -132,140 +96,326 @@ EOF
 sudo sysctl --system
 ```
 
-### Phase 4: Cluster Initialization (Master Node Only)
+### 4. Initialize Cluster (Master Node Only)
 
-#### 4.1 Initialize Kubernetes Cluster
+Initialize the cluster:
 ```bash
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 ```
 
-#### 4.2 Configure kubectl
+Configure kubectl:
 ```bash
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
-#### 4.3 Install CNI Plugin (Calico)
+Install Calico networking:
 ```bash
 kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 ```
 
-### Phase 5: Join Worker Nodes
+### 5. Join Worker Nodes
 
-#### 5.1 Generate Join Command (Master Node)
+Get join command from master:
 ```bash
 sudo kubeadm token create --print-join-command
 ```
 
-#### 5.2 Join Workers (Worker Nodes)
-Run the join command from step 5.1 on each worker node.
+Run the join command on each worker node:
+```bash
+sudo kubeadm join <master-ip>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+```
 
-### Phase 6: Verification
+### 6. Verify Installation
 
-#### 6.1 Check Node Status
+Check nodes:
 ```bash
 kubectl get nodes
 ```
 
-#### 6.2 Verify System Pods
+Check system pods:
 ```bash
-kubectl get pods -n kube-system -o wide
+kubectl get pods -n kube-system
 ```
 
-#### 6.3 Deploy Test Application
-```bash
-# Create test pod
-kubectl run nginx --image=nginx --port=80
+## File Structure and Descriptions
 
-# Expose as service
-kubectl expose pod nginx --type=NodePort --port=80
-
-# Check service
-kubectl get svc
-kubectl get nodes -o wide
+```
+cks/
+├── README.md                    # This comprehensive guide
+├── Server-access.md             # SSH access information for cluster nodes
+├── network-setup.sh             # Automated cluster setup script
+├── create-tenant.sh             # Complete tenant creation with isolation
+├── create-sa.sh                 # Service account and RBAC creator
+├── namespace.yaml               # Namespace template for tenants
+├── rbac.yaml                    # Role and RoleBinding templates
+├── networkpolicy.yaml           # Network policy for tenant isolation
+├── limitrange.yaml              # Resource limits for containers
+├── resourcequota.yaml           # Resource quotas for namespaces
+├── kubeconfig-template..yml     # Kubeconfig template for service accounts
+├── role-template.yml            # Role template for RBAC
+└── rolebinding-template..yml    # RoleBinding template for RBAC
 ```
 
-## Troubleshooting
+## Core Files
 
-### Common Issues
+### network-setup.sh
+Automated script that performs complete cluster setup on all nodes. Contains all commands from the step-by-step installation guide.
 
-#### Node Not Ready
+**Usage:**
 ```bash
-# Check kubelet logs
-sudo journalctl -xeu kubelet
-
-# Check containerd status
-sudo systemctl status containerd
+chmod +x network-setup.sh
+sudo ./network-setup.sh
 ```
 
-#### Pod Network Issues
-```bash
-# Verify CNI installation
-kubectl get pods -n kube-system | grep calico
+### Server-access.md
+Contains SSH connection commands for accessing cluster nodes with proper key files and IP addresses.
 
-# Check network settings
-cat /proc/sys/net/bridge/bridge-nf-call-iptables
-cat /proc/sys/net/ipv4/ip_forward
+## Security Configuration Files
+
+### Tenant Management Scripts
+
+#### create-tenant.sh
+Complete tenant creation script that sets up isolated namespaces with:
+- Resource quotas and limits
+- Service accounts with admin access
+- Network policies for isolation
+- Kubeconfig files for tenant users
+
+**Usage:**
+```bash
+chmod +x create-tenant.sh
+./create-tenant.sh
 ```
 
-#### Join Command Expired
+**Features:**
+- Interactive prompts for tenant configuration
+- Automatic resource quota setup
+- Network isolation between tenants
+- Kubeconfig generation for tenant access
+
+#### create-sa.sh
+Service account creator with flexible RBAC configuration:
+- Creates service accounts in specified namespaces
+- Configures roles with admin or view access
+- Generates kubeconfig files for service account access
+
+**Usage:**
 ```bash
-# Generate new token
-kubeadm token create --print-join-command
+chmod +x create-sa.sh
+./create-sa.sh
 ```
 
-### Service Status Checks
+### YAML Configuration Templates
+
+#### namespace.yaml
+Template for creating tenant namespaces with proper labeling:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{TENANT_NAME}}
+  labels:
+    tenant: {{TENANT_NAME}}
+```
+
+**Purpose:** Creates isolated namespaces for different tenants or applications.
+
+#### rbac.yaml
+Role-based access control template defining:
+- Role with permissions for pods, services, deployments, configmaps, secrets
+- RoleBinding connecting users to roles within namespaces
+
+**Purpose:** Implements least-privilege access control for tenant users.
+
+#### networkpolicy.yaml
+Network policy for tenant isolation:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-ns
+  namespace: {{TENANT_NAME}}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+```
+
+**Purpose:** Prevents cross-namespace communication, ensuring tenant isolation.
+
+#### limitrange.yaml
+Container resource limits template:
+- Default CPU: 500m, Memory: 512Mi
+- Default requests: CPU: 200m, Memory: 256Mi
+
+**Purpose:** Prevents resource exhaustion by setting default limits on containers.
+
+#### resourcequota.yaml
+Namespace-level resource quotas:
+- CPU requests: 2 cores
+- Memory requests: 4Gi
+- Storage: 10Gi
+- Pod limit: 10
+
+**Purpose:** Controls resource consumption at the namespace level.
+
+### Template Files
+
+#### kubeconfig-template..yml
+Template for generating kubeconfig files for service accounts with:
+- Cluster configuration
+- User authentication via service account tokens
+- Namespace context setup
+
+#### role-template.yml
+Flexible role template supporting both admin and view access levels with configurable permissions.
+
+#### rolebinding-template..yml
+RoleBinding template that connects service accounts to roles within specific namespaces.
+
+## Security Features for CKS
+
+### Network Security
+- **Network Policies:** Isolate tenant traffic and prevent cross-namespace communication
+- **Calico CNI:** Advanced networking with security features
+
+### Access Control
+- **RBAC:** Role-based access control with least-privilege principles
+- **Service Accounts:** Dedicated accounts for applications and users
+- **Namespace Isolation:** Logical separation of resources
+
+### Resource Management
+- **Resource Quotas:** Prevent resource exhaustion attacks
+- **Limit Ranges:** Set default resource limits for containers
+- **Pod Security:** Container security contexts and restrictions
+
+## Usage Examples
+
+### Create a New Tenant
 ```bash
-# Check kubelet
-sudo systemctl status kubelet
+./create-tenant.sh
+# Follow prompts to create isolated tenant environment
+```
 
-# Check containerd
-sudo systemctl status containerd
+### Create Service Account with Admin Access
+```bash
+./create-sa.sh
+# Choose namespace: production
+# ServiceAccount name: app-admin
+# Access level: admin
+```
 
-# Restart services if needed
+### Apply Security Policies
+```bash
+# Apply network policy for existing namespace
+sed 's/{{TENANT_NAME}}/production/g' networkpolicy.yaml | kubectl apply -f -
+
+# Apply resource quota
+sed 's/{{TENANT_NAME}}/production/g' resourcequota.yaml | kubectl apply -f -
+```
+
+## Common Issues
+
+**Node not ready:**
+```bash
 sudo systemctl restart kubelet
 sudo systemctl restart containerd
 ```
 
-## Security Considerations
-
-- Firewall rules should be configured appropriately
-- Regular security updates should be applied
-- RBAC should be implemented for production use
-- Network policies should be configured
-- Pod security standards should be enforced
-
-## File Structure
-
-```
-cks/
-├── README.md           # This documentation
-└── network-setup.sh    # Automated setup script
+**Network issues:**
+```bash
+kubectl get pods -n kube-system | grep calico
 ```
 
-## Contributing
+**Join command expired:**
+```bash
+sudo kubeadm token create --print-join-command
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+**Permission denied for tenant:**
+```bash
+# Check RBAC configuration
+kubectl get rolebindings -n <namespace>
+kubectl describe role <role-name> -n <namespace>
+```
 
-## License
+## CKS Exam Topics Covered
 
-This project is licensed under the MIT License.
+This setup addresses all major CKS exam domains:
+
+### Cluster Setup (10%)
+- Secure cluster installation
+- Network security policies
+- CIS benchmark compliance
+
+### Cluster Hardening (15%)
+- RBAC configuration
+- Service account security
+- Minimize access permissions
+
+### System Hardening (15%)
+- Network policies
+- Resource quotas and limits
+- Secure configurations
+
+### Minimize Microservice Vulnerabilities (20%)
+- Security contexts
+- Resource restrictions
+- Network isolation
+
+### Supply Chain Security (20%)
+- Service account management
+- RBAC best practices
+- Secure configurations
+
+### Monitoring and Runtime Security (20%)
+- Resource monitoring
+- Access logging
+- Security policy enforcement
+
+## Testing Your Setup
+
+### Verify Network Isolation
+```bash
+# Create test pods in different namespaces
+kubectl run test-pod1 --image=busybox -n tenant1 --sleep 3600
+kubectl run test-pod2 --image=busybox -n tenant2 --sleep 3600
+
+# Test connectivity (should fail with network policy)
+kubectl exec test-pod1 -n tenant1 -- ping <pod2-ip>
+```
+
+### Test RBAC
+```bash
+# Use tenant kubeconfig
+export KUBECONFIG=tenant1-kubeconfig.yaml
+
+# Try accessing other namespaces (should fail)
+kubectl get pods -n kube-system
+```
+
+### Verify Resource Limits
+```bash
+# Deploy resource-intensive pod
+kubectl run resource-test --image=nginx --requests=cpu=3 -n tenant1
+# Should be rejected due to quota limits
+```
 
 ## Resources
 
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [CKS Exam Guide](https://kubernetes.io/docs/reference/config-file/kubeadm-config/)
 - [Calico Documentation](https://docs.projectcalico.org/)
-- [Containerd Documentation](https://containerd.io/)
+- [RBAC Documentation](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
+- [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
-## Support
+## Next Steps
 
-For issues and questions:
-- Check the troubleshooting section
-- Review Kubernetes official documentation
-- Open an issue in this repository
+1. Practice creating and managing tenants
+2. Implement advanced network policies
+3. Configure pod security standards
+4. Set up monitoring and logging
+5. Practice CKS exam scenarios
