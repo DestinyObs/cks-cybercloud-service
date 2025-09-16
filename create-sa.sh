@@ -46,4 +46,4 @@ SERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
 
 sed "s|<NAMESPACE>|$NAMESPACE|g; s|<SA_NAME>|$SA_NAME|g; s|<TOKEN>|$TOKEN|g; s|<CA_DATA>|$CA_DATA|g; s|<SERVER>|$SERVER|g" kubeconfig-template.yaml > ${SA_NAME}-kubeconfig.yaml
 
-echo "✅ Kubeconfig file created: ${SA_NAME}-kubeconfig.yaml"
+echo "Kubeconfig file created: ${SA_NAME}-kubeconfig.yaml"
